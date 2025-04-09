@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Textarea } from "@/components/ui/textarea"
 
 export default function ArduinoProgramming() {
   const [code, setCode] = useState("")
@@ -24,10 +25,10 @@ export default function ArduinoProgramming() {
         <CardTitle>Arduino Programming</CardTitle>
       </CardHeader>
       <CardContent>
-        <textarea
+        <Textarea
           value={code}
           onChange={(e) => setCode(e.target.value)}
-          className="w-full h-40 p-2 mb-4 font-mono text-sm border rounded"
+          className="w-full h-40 p-2 mb-4 font-mono text-sm"
           placeholder="Enter Arduino code here..."
         />
         <div className="flex space-x-2 mb-4">
@@ -41,4 +42,3 @@ export default function ArduinoProgramming() {
     </Card>
   )
 }
-

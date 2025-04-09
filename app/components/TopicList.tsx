@@ -2,7 +2,7 @@
 
 import { useState, useRef } from "react"
 import { Input } from "@/components/ui/input"
-import { MoreVertical, Maximize2, Minimize2 } from "lucide-react"
+import { MoreVertical, Maximize2, Minimize2, WifiIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -99,8 +99,15 @@ export default function TopicList() {
     setTileSizes(newSizes)
   }
 
+  // Add a no connection message to the TopicList component
   return (
     <div className="space-y-4 p-4">
+      <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md p-3 mb-4">
+        <p className="text-red-600 dark:text-red-400 text-sm flex items-center">
+          <WifiIcon className="h-4 w-4 mr-2" />
+          Not connected to robot. Topic data is simulated.
+        </p>
+      </div>
       <Input type="text" placeholder="Filter topics..." value={filter} onChange={(e) => setFilter(e.target.value)} />
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {tileOrder.map((orderIndex) => {
@@ -176,4 +183,3 @@ export default function TopicList() {
     </div>
   )
 }
-

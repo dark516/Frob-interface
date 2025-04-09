@@ -9,9 +9,11 @@ import { Textarea } from "@/components/ui/textarea"
 import { Send, Play, Square } from "lucide-react"
 import LidarView from "./visualizations/LidarView"
 import CameraView from "./visualizations/CameraView"
+import { ScrollArea } from "@/components/ui/scroll-area"
 
 interface TopicWindowProps {
   topicName: string
+  isMobile?: boolean
 }
 
 const mockTopicData = {
@@ -47,21 +49,42 @@ const mockTopicData = {
   },
 }
 
-export default function TopicWindow({ topicName }: TopicWindowProps) {
-  const [topicData, setTopicData] = useState(mockTopicData[topicName as keyof typeof mockTopicData])
-  const [publishData, setPublishData] = useState(topicData.template)
+export default function TopicWindow({ topicName, isMobile = false }: TopicWindowProps) {
+  // Modify the TopicWindow component to show no connection status
+  const [topicData, setTopicData] = useState<any>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>("Not connected to robot. Topic data is simulated.")
+  const [publishData, setPublishData] = useState("")
   const [publishRate, setPublishRate] = useState("1")
   const [isPublishing, setIsPublishing] = useState(false)
   const [publishInterval, setPublishInterval] = useState<NodeJS.Timeout | null>(null)
-  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    // Set mock data based on the topic name
+    setTopicData(
+      mockTopicData[topicName] || {
+        type: "unknown",
+        data: "{}",
+        frequency: "0 Hz",
+        template: "{}",
+      },
+    )
+    setLoading(false)
+
     return () => {
       if (publishInterval) {
         clearInterval(publishInterval)
       }
     }
-  }, [publishInterval])
+  }, [topicName])
+
+  const handlePublish = () => {
+    setError("Cannot publish: No connection to robot")
+  }
+
+  const toggleContinuousPublish = useCallback(() => {
+    setError("Cannot publish: No connection to robot")
+  }, [])
 
   const validateAndFormatJSON = useCallback((jsonString: string) => {
     try {
@@ -72,24 +95,25 @@ export default function TopicWindow({ topicName }: TopicWindowProps) {
     }
   }, [])
 
-  const handlePublish = useCallback(() => {
+  /*
+  const handlePublish = () => {
     try {
-      const formattedData = validateAndFormatJSON(publishData)
-      setError(null)
-
-      // In a real application, this would publish to the actual ROS topic
-      console.log(`Publishing to ${topicName}:`, formattedData)
-
-      // Update the displayed data
-      setTopicData((prev) => ({
-        ...prev,
-        data: formattedData,
-      }))
+      const data = JSON.parse(publishData)
+      wsConnection.send({
+        type: "ros2",
+        action: "publish",
+        payload: {
+          topic: topicName,
+          message: data,
+        },
+      })
     } catch (e) {
       setError("Invalid JSON data")
     }
-  }, [publishData, topicName, validateAndFormatJSON])
+  }
+  */
 
+  /*
   const toggleContinuousPublish = useCallback(() => {
     if (isPublishing) {
       if (publishInterval) {
@@ -119,6 +143,7 @@ export default function TopicWindow({ topicName }: TopicWindowProps) {
     }
     setIsPublishing(!isPublishing)
   }, [isPublishing, publishInterval, publishData, publishRate, topicName, validateAndFormatJSON])
+  */
 
   const formatData = useCallback(() => {
     try {
@@ -141,20 +166,57 @@ export default function TopicWindow({ topicName }: TopicWindowProps) {
     }
   }
 
+  if (loading) {
+    return (
+      <Card className="h-full w-full">
+        <CardHeader className="pb-2">
+          <CardTitle>{topicName}</CardTitle>
+          <CardDescription>Loading...</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <p>Loading topic data...</p>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (!topicData) {
+    return (
+      <Card className="h-full w-full">
+        <CardHeader className="pb-2">
+          <CardTitle>{topicName}</CardTitle>
+          <CardDescription>Error</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <p>Failed to load topic data.</p>
+          {error && <p className="text-sm text-destructive">{error}</p>}
+        </CardContent>
+      </Card>
+    )
+  }
+
   return (
     <Card className="h-full w-full">
       <CardHeader className="pb-2">
-        <CardTitle>{topicName}</CardTitle>
-        <CardDescription>{topicData.type}</CardDescription>
+        <CardTitle className="text-base sm:text-lg truncate">{topicName}</CardTitle>
+        <CardDescription className="text-xs sm:text-sm">{topicData.type}</CardDescription>
       </CardHeader>
       <CardContent>
         <Tabs defaultValue="info" className="w-full">
-          <TabsList className="w-full grid grid-cols-4">
+          <TabsList className={`w-full grid ${isMobile ? "grid-cols-2" : "grid-cols-4"}`}>
             <TabsTrigger value="info">Info</TabsTrigger>
             <TabsTrigger value="data">Data</TabsTrigger>
-            <TabsTrigger value="publish">Publish</TabsTrigger>
-            <TabsTrigger value="visualization">Visualization</TabsTrigger>
+            {!isMobile && <TabsTrigger value="publish">Publish</TabsTrigger>}
+            {!isMobile && <TabsTrigger value="visualization">Visualization</TabsTrigger>}
           </TabsList>
+
+          {isMobile && (
+            <TabsList className="w-full grid grid-cols-2 mt-1">
+              <TabsTrigger value="publish">Publish</TabsTrigger>
+              <TabsTrigger value="visualization">Visualization</TabsTrigger>
+            </TabsList>
+          )}
+
           <TabsContent value="info">
             <div className="space-y-2">
               <p>
@@ -165,11 +227,15 @@ export default function TopicWindow({ topicName }: TopicWindowProps) {
               </p>
             </div>
           </TabsContent>
+
           <TabsContent value="data">
-            <pre className="bg-muted p-2 rounded text-sm font-mono overflow-auto max-h-[200px]">
-              {validateAndFormatJSON(topicData.data)}
-            </pre>
+            <ScrollArea className="max-h-[200px]">
+              <pre className="bg-muted p-2 rounded text-sm font-mono overflow-auto">
+                {topicData.data ? validateAndFormatJSON(JSON.stringify(topicData.data)) : "No data"}
+              </pre>
+            </ScrollArea>
           </TabsContent>
+
           <TabsContent value="publish" className="space-y-4">
             <div className="space-y-2">
               <div className="flex justify-between items-center">
@@ -182,12 +248,12 @@ export default function TopicWindow({ topicName }: TopicWindowProps) {
                 value={publishData}
                 onChange={(e) => setPublishData(e.target.value)}
                 className="font-mono text-sm"
-                rows={5}
+                rows={isMobile ? 3 : 5}
               />
               {error && <p className="text-sm text-destructive">{error}</p>}
             </div>
-            <div className="flex items-end gap-4">
-              <div className="flex-1">
+            <div className={isMobile ? "space-y-2" : "flex items-end gap-4"}>
+              <div className={isMobile ? "w-full" : "flex-1"}>
                 <label className="text-sm font-medium">Publish Rate (Hz):</label>
                 <Input
                   type="number"
@@ -199,7 +265,7 @@ export default function TopicWindow({ topicName }: TopicWindowProps) {
                   className="mt-1"
                 />
               </div>
-              <div className="flex items-center gap-2">
+              <div className={isMobile ? "grid grid-cols-2 gap-2 mt-2" : "flex items-center gap-2"}>
                 <Button onClick={handlePublish} size="sm">
                   <Send className="h-4 w-4 mr-2" />
                   Publish Once
@@ -211,6 +277,7 @@ export default function TopicWindow({ topicName }: TopicWindowProps) {
               </div>
             </div>
           </TabsContent>
+
           <TabsContent value="visualization" className="min-h-[200px]">
             {renderVisualization()}
           </TabsContent>
@@ -219,4 +286,3 @@ export default function TopicWindow({ topicName }: TopicWindowProps) {
     </Card>
   )
 }
-

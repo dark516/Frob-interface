@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Folder, File, Upload, Edit2, Trash2, ChevronRight, Plus, Move, Terminal } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -14,6 +14,7 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu"
+import { ScrollArea } from "@/components/ui/scroll-area"
 
 interface FileSystemItem {
   id: string
@@ -107,10 +108,13 @@ interface FileSystemProps {
   onOpenFile: (file: FileSystemItem, type: "text" | "arduino") => void
   onOpenTerminal: (path: string) => void
   onSaveFile?: (path: string, content: string) => void
+  isMobile?: boolean
 }
 
-export default function FileSystem({ onOpenFile, onOpenTerminal, onSaveFile }: FileSystemProps) {
-  const [fileSystem, setFileSystem] = useState(mockFileSystem)
+export default function FileSystem({ onOpenFile, onOpenTerminal, onSaveFile, isMobile = false }: FileSystemProps) {
+  const [fileSystem, setFileSystem] = useState<FileSystemItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [expandedFolders, setExpandedFolders] = useState<string[]>([])
   const [selectedItem, setSelectedItem] = useState<FileSystemItem | null>(null)
   const [isRenaming, setIsRenaming] = useState<string | null>(null)
@@ -123,6 +127,18 @@ export default function FileSystem({ onOpenFile, onOpenTerminal, onSaveFile }: F
   const [showUploadDialog, setShowUploadDialog] = useState(false)
   const [uploadPath, setUploadPath] = useState("/")
   const [expandedUploadFolders, setExpandedUploadFolders] = useState<string[]>([])
+  const [showContextMenu, setShowContextMenu] = useState(false)
+
+  // Modify the FileSystem component to show it's using mock data
+  useEffect(() => {
+    // Set mock file system data directly
+    setFileSystem(mockFileSystem)
+    setLoading(false)
+
+    return () => {
+      // No cleanup needed
+    }
+  }, [])
 
   const isArduinoFile = (filename: string) => {
     return filename.endsWith(".ino")
@@ -281,56 +297,64 @@ export default function FileSystem({ onOpenFile, onOpenTerminal, onSaveFile }: F
   }
 
   const handleFileSave = (path: string, content: string) => {
-    const pathParts = path.split("/")
-    const fileName = pathParts.pop()!
-    const parentPath = pathParts.join("/")
-
-    const newFile: FileSystemItem = {
-      id: `file-${Date.now()}`,
-      name: fileName,
-      type: "file",
-      path: path,
-      content: content,
-    }
-
-    const addToPath = (items: FileSystemItem[]): FileSystemItem[] => {
+    // Update local mock data only
+    const updateFileInSystem = (items: FileSystemItem[]): FileSystemItem[] => {
       return items.map((item) => {
-        if (item.path === parentPath && item.type === "directory") {
-          // Check if file already exists
-          const existingFileIndex = item.children?.findIndex((child) => child.path === path)
-          if (existingFileIndex !== undefined && existingFileIndex !== -1 && item.children) {
-            // Update existing file
-            const newChildren = [...item.children]
-            newChildren[existingFileIndex] = newFile
-            return { ...item, children: newChildren }
-          }
-          // Add new file
-          return {
-            ...item,
-            children: [...(item.children || []), newFile],
-          }
+        if (item.path === path) {
+          return { ...item, content }
         }
         if (item.children) {
-          return {
-            ...item,
-            children: addToPath(item.children),
-          }
+          return { ...item, children: updateFileInSystem(item.children) }
         }
         return item
       })
     }
 
-    setFileSystem((prev) => {
-      if (parentPath === "") {
-        const existingFileIndex = prev.findIndex((item) => item.path === path)
-        if (existingFileIndex !== -1) {
-          const newFiles = [...prev]
-          newFiles[existingFileIndex] = newFile
-          return newFiles
-        }
-        return [...prev, newFile]
-      }
-      return addToPath(prev)
+    setFileSystem((prev) => updateFileInSystem(prev))
+    console.log("File saved locally (no robot connection):", path)
+  }
+
+  const handleDelete = (path: string) => {
+    const wsConnection = {
+      subscribe: (channel: string, callback: (message: any) => void) => {
+        // Mock subscribe function
+        console.log(`Subscribed to channel: ${channel}`)
+      },
+      unsubscribe: (channel: string, callback: (message: any) => void) => {
+        // Mock unsubscribe function
+        console.log(`Unsubscribed from channel: ${channel}`)
+      },
+      send: (message: any) => {
+        // Mock send function
+        console.log("Sending message:", message)
+      },
+    }
+    wsConnection.send({
+      type: "filesystem",
+      action: "delete",
+      payload: { path },
+    })
+  }
+
+  const handleMove = (oldPath: string, newPath: string) => {
+    const wsConnection = {
+      subscribe: (channel: string, callback: (message: any) => void) => {
+        // Mock subscribe function
+        console.log(`Subscribed to channel: ${channel}`)
+      },
+      unsubscribe: (channel: string, callback: (message: any) => void) => {
+        // Mock unsubscribe function
+        console.log(`Unsubscribed from channel: ${channel}`)
+      },
+      send: (message: any) => {
+        // Mock send function
+        console.log("Sending message:", message)
+      },
+    }
+    wsConnection.send({
+      type: "filesystem",
+      action: "move",
+      payload: { oldPath, newPath },
     })
   }
 
@@ -383,12 +407,12 @@ export default function FileSystem({ onOpenFile, onOpenTerminal, onSaveFile }: F
 
   const renderUploadDialog = () => (
     <Dialog open={showUploadDialog} onOpenChange={setShowUploadDialog}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className={isMobile ? "w-[95vw] max-w-lg" : "max-w-2xl"}>
         <DialogHeader>
           <DialogTitle>Select Upload Location</DialogTitle>
         </DialogHeader>
-        <div className="grid grid-cols-[1fr,2fr] gap-4">
-          <div className="border rounded-lg p-4 max-h-[400px] overflow-y-auto">
+        <div className={isMobile ? "flex flex-col space-y-4" : "grid grid-cols-[1fr,2fr] gap-4"}>
+          <ScrollArea className={isMobile ? "h-[200px]" : "h-[400px]"} className="border rounded-lg p-4">
             <Button
               variant="ghost"
               className={`w-full justify-start mb-2 ${uploadPath === "/" ? "bg-accent" : ""}`}
@@ -398,7 +422,7 @@ export default function FileSystem({ onOpenFile, onOpenTerminal, onSaveFile }: F
               Root
             </Button>
             {renderFolderTree(fileSystem, 0, true)}
-          </div>
+          </ScrollArea>
           <div className="space-y-4">
             <div>
               <h4 className="text-sm font-medium mb-2">Selected Path</h4>
@@ -421,12 +445,12 @@ export default function FileSystem({ onOpenFile, onOpenTerminal, onSaveFile }: F
 
   const renderNewFolderDialog = () => (
     <Dialog open={showNewFolderDialog} onOpenChange={setShowNewFolderDialog}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className={isMobile ? "w-[95vw] max-w-lg" : "max-w-2xl"}>
         <DialogHeader>
           <DialogTitle>Create New Folder</DialogTitle>
         </DialogHeader>
-        <div className="grid grid-cols-[1fr,2fr] gap-4">
-          <div className="border rounded-lg p-4 max-h-[400px] overflow-y-auto">
+        <div className={isMobile ? "flex flex-col space-y-4" : "grid grid-cols-[1fr,2fr] gap-4"}>
+          <ScrollArea className={isMobile ? "h-[200px]" : "h-[400px]"} className="border rounded-lg p-4">
             <Button
               variant="ghost"
               className={`w-full justify-start mb-2 ${newFolderPath === "/" ? "bg-accent" : ""}`}
@@ -436,7 +460,7 @@ export default function FileSystem({ onOpenFile, onOpenTerminal, onSaveFile }: F
               Root
             </Button>
             {renderFolderTree(fileSystem)}
-          </div>
+          </ScrollArea>
           <div className="space-y-4">
             <div>
               <h4 className="text-sm font-medium mb-2">Selected Path</h4>
@@ -468,6 +492,85 @@ export default function FileSystem({ onOpenFile, onOpenTerminal, onSaveFile }: F
     return items.map((item) => {
       const expanded = expandedFolders.includes(item.path)
 
+      // For mobile, use a simpler approach with long press or action buttons
+      if (isMobile) {
+        return (
+          <div key={item.id} className="border-b border-border last:border-0">
+            <div
+              className="flex items-center justify-between py-3 px-2"
+              onClick={() => {
+                if (item.type === "file") {
+                  onOpenFile(item, isArduinoFile(item.name) ? "arduino" : "text")
+                } else {
+                  toggleFolder(item.path)
+                }
+                setSelectedItem(item)
+              }}
+            >
+              <div className="flex items-center flex-1 min-w-0">
+                {item.type === "directory" && (
+                  <ChevronRight className={`h-5 w-5 mr-2 transition-transform ${expanded ? "rotate-90" : ""}`} />
+                )}
+                {item.type === "directory" ? (
+                  <Folder className="h-5 w-5 mr-2 text-blue-500" />
+                ) : (
+                  <File className="h-5 w-5 mr-2 text-gray-500" />
+                )}
+                {isRenaming === item.id ? (
+                  <Input
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        submitRename(item)
+                      }
+                    }}
+                    onBlur={() => submitRename(item)}
+                    className="text-sm"
+                    autoFocus
+                  />
+                ) : (
+                  <span className="truncate">{item.name}</span>
+                )}
+              </div>
+
+              <div className="flex">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 w-8 p-0"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    if (item.type === "file") {
+                      onOpenFile(item, isArduinoFile(item.name) ? "arduino" : "text")
+                    } else {
+                      onOpenTerminal(item.path)
+                    }
+                  }}
+                >
+                  {item.type === "file" ? <Edit2 className="h-4 w-4" /> : <Terminal className="h-4 w-4" />}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 w-8 p-0 text-red-500"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    deleteItem(item)
+                  }}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+            {expanded && item.children && (
+              <div className="ml-4 border-l border-border pl-2">{renderFileSystem(item.children, level + 1)}</div>
+            )}
+          </div>
+        )
+      }
+
+      // Desktop version with context menu
       return (
         <div key={item.id}>
           <ContextMenu>
@@ -548,12 +651,14 @@ export default function FileSystem({ onOpenFile, onOpenTerminal, onSaveFile }: F
 
   const renderMoveDialog = () => (
     <Dialog open={showMoveDialog} onOpenChange={() => setShowMoveDialog(false)}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className={isMobile ? "w-[95vw] max-w-lg" : "max-w-2xl"}>
         <DialogHeader>
           <DialogTitle>Move to...</DialogTitle>
         </DialogHeader>
-        <div className="grid grid-cols-[1fr,2fr] gap-4">
-          <div className="border rounded-lg p-4 max-h-[400px] overflow-y-auto">{renderFolderTree(fileSystem)}</div>
+        <div className={isMobile ? "flex flex-col space-y-4" : "grid grid-cols-[1fr,2fr] gap-4"}>
+          <ScrollArea className={isMobile ? "h-[200px]" : "h-[400px]"} className="border rounded-lg p-4">
+            {renderFolderTree(fileSystem)}
+          </ScrollArea>
           <div>
             <h4 className="text-sm font-medium mb-2">Target Path</h4>
             <p className="text-sm text-muted-foreground">{newFolderPath}</p>
@@ -583,7 +688,9 @@ export default function FileSystem({ onOpenFile, onOpenTerminal, onSaveFile }: F
           </Button>
         </div>
       </div>
-      <div className="flex-1 overflow-auto">{renderFileSystem(fileSystem)}</div>
+      <ScrollArea className="flex-1">
+        <div className={isMobile ? "divide-y divide-border" : ""}>{renderFileSystem(fileSystem)}</div>
+      </ScrollArea>
       {renderMoveDialog()}
       {renderNewFolderDialog()}
       {renderUploadDialog()}
@@ -601,4 +708,3 @@ function getAllFolderPaths(items: FileSystemItem[], parentPath = ""): string[] {
     return paths
   }, [])
 }
-

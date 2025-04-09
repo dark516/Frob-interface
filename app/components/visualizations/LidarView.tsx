@@ -12,12 +12,6 @@ export default function LidarView() {
     const ctx = canvas.getContext("2d")
     if (!ctx) return
 
-    // Mock LiDAR data (angles and distances)
-    const mockData = Array.from({ length: 360 }, (_, i) => ({
-      angle: i,
-      distance: 50 + Math.random() * 50,
-    }))
-
     // Set canvas size
     canvas.width = canvas.offsetWidth
     canvas.height = canvas.offsetHeight
@@ -26,31 +20,27 @@ export default function LidarView() {
     ctx.fillStyle = "#000"
     ctx.fillRect(0, 0, canvas.width, canvas.height)
 
-    // Draw LiDAR points
+    // Draw circular grid
+    ctx.strokeStyle = "#333"
     const centerX = canvas.width / 2
     const centerY = canvas.height / 2
     const scale = Math.min(canvas.width, canvas.height) / 200
 
-    ctx.beginPath()
-    mockData.forEach((point) => {
-      const rad = (point.angle * Math.PI) / 180
-      const x = centerX + Math.cos(rad) * point.distance * scale
-      const y = centerY + Math.sin(rad) * point.distance * scale
-
-      ctx.fillStyle = "#00ff00"
-      ctx.fillRect(x - 1, y - 1, 2, 2)
-    })
-    ctx.stroke()
-
-    // Draw circular grid
-    ctx.strokeStyle = "#333"
     for (let i = 1; i <= 4; i++) {
       ctx.beginPath()
       ctx.arc(centerX, centerY, i * 25 * scale, 0, 2 * Math.PI)
       ctx.stroke()
     }
+
+    // Draw "No Connection" text
+    ctx.font = "16px Arial"
+    ctx.fillStyle = "#ff0000"
+    ctx.textAlign = "center"
+    ctx.fillText("No Connection to Robot", centerX, centerY - 10)
+    ctx.font = "12px Arial"
+    ctx.fillStyle = "#888888"
+    ctx.fillText("LiDAR data unavailable", centerX, centerY + 20)
   }, [])
 
   return <canvas ref={canvasRef} className="w-full h-64 bg-black" />
 }
-

@@ -1,12 +1,28 @@
 "use client"
 
-import { useState } from "react"
-import Editor from "@monaco-editor/react"
+import type React from "react"
+
+import { useState, useEffect } from "react"
+import dynamic from "next/dynamic"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { SaveIcon, Upload, Folder, ChevronRight } from "lucide-react"
+import { SaveIcon, Upload, Folder, ChevronRight, Code } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { Textarea } from "@/components/ui/textarea"
+
+// Dynamically import Monaco Editor with no SSR
+const MonacoEditor = dynamic(() => import("@monaco-editor/react"), {
+  ssr: false,
+  loading: () => (
+    <div className="flex items-center justify-center h-full w-full bg-muted">
+      <div className="flex flex-col items-center gap-2">
+        <Code className="h-8 w-8 animate-pulse" />
+        <p className="text-sm text-muted-foreground">Loading editor...</p>
+      </div>
+    </div>
+  ),
+})
 
 interface FileSystemItem {
   id: string
@@ -23,21 +39,52 @@ interface TextEditorProps {
   isArduino?: boolean
   onSave?: (path: string, content: string) => void
   fileSystem?: FileSystemItem[]
+  isMobile?: boolean
 }
 
-export default function TextEditor({ filePath, content, isArduino = false, onSave, fileSystem = [] }: TextEditorProps) {
+export default function TextEditor({
+  filePath,
+  content,
+  isArduino = false,
+  onSave,
+  fileSystem = [],
+  isMobile = false,
+}: TextEditorProps) {
   const [editorContent, setEditorContent] = useState(content)
   const [isDirty, setIsDirty] = useState(false)
   const [showSaveDialog, setShowSaveDialog] = useState(false)
   const [selectedPath, setSelectedPath] = useState("/")
   const [fileName, setFileName] = useState("")
   const [expandedFolders, setExpandedFolders] = useState<string[]>([])
+  const [editorMounted, setEditorMounted] = useState(false)
+  const [useSimpleEditor, setUseSimpleEditor] = useState(false)
+
+  // Check if we're in a browser environment and if Monaco might have issues
+  useEffect(() => {
+    // Try to load Monaco, but fall back to simple editor if it fails
+    const checkMonacoAvailability = async () => {
+      try {
+        await import("@monaco-editor/react")
+        setUseSimpleEditor(false)
+      } catch (error) {
+        console.error("Failed to load Monaco Editor:", error)
+        setUseSimpleEditor(true)
+      }
+    }
+
+    checkMonacoAvailability()
+  }, [])
 
   const handleEditorChange = (value: string | undefined) => {
     if (value !== undefined) {
       setEditorContent(value)
       setIsDirty(true)
     }
+  }
+
+  const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setEditorContent(e.target.value)
+    setIsDirty(true)
   }
 
   const handleSave = async () => {
@@ -145,36 +192,48 @@ export default function TextEditor({ filePath, content, isArduino = false, onSav
           {isArduino && (
             <Button size="sm" onClick={handleUpload}>
               <Upload className="h-4 w-4 mr-2" />
-              Upload to Arduino
+              Upload
             </Button>
           )}
         </div>
         {isDirty && <span className="text-sm text-muted-foreground">Unsaved changes</span>}
       </div>
       <div className="flex-1">
-        <Editor
-          height="100%"
-          defaultLanguage={getLanguage()}
-          theme="vs-dark"
-          value={editorContent}
-          onChange={handleEditorChange}
-          options={{
-            minimap: { enabled: false },
-            fontSize: 14,
-            lineNumbers: "on",
-            scrollBeyondLastLine: false,
-            automaticLayout: true,
-            wordWrap: "on",
-          }}
-        />
+        {useSimpleEditor ? (
+          <Textarea
+            value={editorContent}
+            onChange={handleTextareaChange}
+            className="h-full font-mono text-sm resize-none p-4"
+            placeholder="Enter code here..."
+          />
+        ) : (
+          <MonacoEditor
+            height="100%"
+            defaultLanguage={getLanguage()}
+            theme="vs-dark"
+            value={editorContent}
+            onChange={handleEditorChange}
+            onMount={() => setEditorMounted(true)}
+            options={{
+              minimap: { enabled: !isMobile },
+              fontSize: isMobile ? 16 : 14,
+              lineNumbers: "on",
+              scrollBeyondLastLine: false,
+              automaticLayout: true,
+              wordWrap: "on",
+              // Increase padding for touch targets
+              padding: isMobile ? { top: 10, bottom: 10 } : undefined,
+            }}
+          />
+        )}
       </div>
       <Dialog open={showSaveDialog} onOpenChange={setShowSaveDialog}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className={isMobile ? "w-[95vw] max-w-lg" : "max-w-2xl"}>
           <DialogHeader>
             <DialogTitle>Save File</DialogTitle>
           </DialogHeader>
-          <div className="grid grid-cols-[1fr,2fr] gap-4">
-            <ScrollArea className="h-[400px] border rounded-lg p-4">
+          <div className={isMobile ? "flex flex-col space-y-4" : "grid grid-cols-[1fr,2fr] gap-4"}>
+            <ScrollArea className={isMobile ? "h-[200px]" : "h-[400px]"} className="border rounded-lg p-4">
               <Button
                 variant="ghost"
                 className={`w-full justify-start mb-2 ${selectedPath === "/" ? "bg-accent" : ""}`}
@@ -213,4 +272,3 @@ export default function TextEditor({ filePath, content, isArduino = false, onSav
     </div>
   )
 }
-
